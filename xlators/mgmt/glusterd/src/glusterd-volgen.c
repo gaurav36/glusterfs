@@ -3493,8 +3493,14 @@ build_nfs_graph (volgen_graph_t *graph, dict_t *mod_dict)
 
                 if (mod_dict) {
                         dict_copy (mod_dict, set_dict);
-                        ret = volgen_graph_set_options_generic (&cgraph, set_dict, voliter,
-                                                                basic_option_handler);
+                        ret = dict_get_str_boolean (mod_dict, "nfs.drc", 0);
+                        if (ret == -1)
+                                goto out;
+                        if (ret) {
+                                ret = volgen_graph_set_options_generic (&cgraph,
+                                                              set_dict, voliter,
+                                                          basic_option_handler);
+                        }
                 } else {
                         ret = volgen_graph_set_options_generic (&cgraph, voliter->dict, voliter,
                                                                 basic_option_handler);
