@@ -530,15 +530,23 @@ glusterd_handle_defrag_volume (rpcsvc_request_t *req)
 int
 glusterd_op_stage_rebalance (dict_t *dict, char **op_errstr)
 {
-        char                    *volname = NULL;
-        char                    *cmd_str = NULL;
-        int                     ret = 0;
-        int32_t                 cmd = 0;
-        char                    msg[2048] = {0};
-        glusterd_volinfo_t      *volinfo = NULL;
+        char                    *volname     = NULL;
+        char                    *cmd_str     = NULL;
+        char                    *brick_str   = NULL;
+        int                     ret          = 0;
+        int32_t                 cmd          = 0;
+        char                    msg[2048]    = {0};
+        glusterd_volinfo_t      *volinfo     = NULL;
         char                    *task_id_str = NULL;
-        dict_t                  *op_ctx = NULL;
-        xlator_t                *this = 0;
+        dict_t                  *op_ctx      = NULL;
+        xlator_t                *this        = 0;
+        int                      i           = 0;
+        int                      j           = 0;
+        char                     key[256]    = {0,};
+        char                    *brick       = NULL;
+        int32_t                  count       = 0;
+        int32_t                  brick_count = 0;
+        glusterd_brickinfo_t    *brickinfo   = NULL;
 
         this = THIS;
         GF_ASSERT (this);
@@ -630,17 +638,87 @@ glusterd_op_stage_rebalance (dict_t *dict, char **op_errstr)
                      ret = -1;
                      goto out;
                 }
-                if ((strstr(cmd_str,"rebalance") != NULL) &&
-                         (volinfo->rebal.op != GD_OP_REBALANCE)){
-                        snprintf (msg,sizeof(msg),"Rebalance not started.");
+                if ((strstr(cmd_str, "rebalance") != NULL) &&
+                    (volinfo->rebal.op != GD_OP_REBALANCE)) {
+                        snprintf (msg, sizeof(msg), "Rebalance not started.");
                         ret = -1;
                         goto out;
                 }
-                if ((strstr(cmd_str,"remove-brick")!= NULL) &&
-                          (volinfo->rebal.op != GD_OP_REMOVE_BRICK)){
-                        snprintf (msg,sizeof(msg),"remove-brick not started.");
-                        ret = -1;
-                        goto out;
+                if (strstr(cmd_str, "remove-brick") != NULL) {
+                        if (volinfo->rebal.op != GD_OP_REMOVE_BRICK) {
+                                snprintf (msg, sizeof(msg), "remove-brick not "
+                                          "started.");
+                                ret = -1;
+                                goto out;
+                        }
+
+                        /* For remove-brick status/stop command check whether
+                         * given input brick is part of volume or not.*/
+                        if (strstr(cmd_str, "remove-brick") != NULL) {
+                                ret = dict_get_int32 (dict, "brick_count",
+                                                      &brick_count);
+                                if (ret) {
+                                        gf_log (this->name, GF_LOG_ERROR,
+                                                "unable to get brick count");
+                                        goto out;
+                                }
+
+                                ret = dict_get_int32 (volinfo->rebal.dict,
+                                                      "count", &count);
+                                if (ret) {
+                                        gf_log (this->name, GF_LOG_ERROR,
+                                                "Unable to get count value");
+                                        goto out;
+                                }
+
+                                for (i = 1; i <= brick_count; i++) {
+                                        memset (key, 0, sizeof (key));
+                                        snprintf (key, sizeof (key), "brick%d",
+                                                  i);
+                                        ret = dict_get_str (dict, key, &brick);
+                                        if (ret) {
+                                                snprintf (msg, sizeof (msg),
+                                                          "Unable to get %s",
+                                                          key);
+                                                goto out;
+                                        }
+
+                                        for (j = 1; j <= count; j++) {
+                                                memset (key, 0, sizeof (key));
+                                                snprintf (key, sizeof (key),
+                                                          "brick%d", j);
+
+                                                ret = dict_get_str (
+                                                            volinfo->rebal.dict,
+                                                            key, &brick_str);
+                                                if (ret) {
+                                                        snprintf (msg,
+                                                                  sizeof (msg),
+                                                                  "Unable to "
+                                                                  "get %s",
+                                                                  key);
+                                                        goto out;
+                                                }
+
+                                                if (!strcmp (brick_str, brick)) {
+                                                        break;
+                                                } else {
+                                                        if (j == count) {
+                                                                snprintf (msg,
+                                                                   sizeof (msg),
+                                                                   "Incorrect "
+                                                                   "brick %s "
+                                                                   "for volume "
+                                                                   "%s", brick,
+                                                                   volname);
+                                                                ret = -1;
+                                                                goto out;
+                                                        }
+                                                }
+
+                                        }
+                                }
+                        }
                 }
                 break;
         default:
