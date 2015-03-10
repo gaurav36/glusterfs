@@ -1,35 +1,3 @@
-/*
-   Copyright (c) 2010-2013 Red Hat, Inc. <http://www.redhat.com>
-   This file is part of GlusterFS.
-
-   This file is licensed to you under your choice of the GNU Lesser
-   General Public License, version 3 or any later version (LGPLv3 or
-   later), or the GNU General Public License, version 2 (GPLv2), in all
-   cases as published by the Free Software Foundation.
-*/
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <pthread.h>
-
-#ifndef _CONFIG_H
-#define _CONFIG_H
-#include "config.h"
-#endif
-
-#include "cli.h"
-#include "cli-cmd.h"
-#include "cli-mem-types.h"
-#include "dict.h"
-
-#include "protocol-common.h"
-#include "cli1-xdr.h"
-
-#define MAX_SNAP_DESCRIPTION_LEN 1024
-
-struct snap_config_opt_vals_ snap_confopt_vals[] = {
-        {.op_name        = "snap-max-hard-limit",
          .question       = "Changing snapshot-max-hard-limit "
                            "will lead to deletion of snapshots "
                            "if they exceed the new limit.\n"

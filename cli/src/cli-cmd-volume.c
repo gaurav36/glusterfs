@@ -1,6 +1,3 @@
-/*
-   Copyright (c) 2010-2012 Red Hat, Inc. <http://www.redhat.com>
-   This file is part of GlusterFS.
 
    This file is licensed to you under your choice of the GNU Lesser
    General Public License, version 3 or any later version (LGPLv3 or
