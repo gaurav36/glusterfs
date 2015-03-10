@@ -851,6 +851,9 @@ int
 glusterd_handle_quota (rpcsvc_request_t *req);
 
 int
+glusterd_handle_bitrot (rpcsvc_request_t *req);
+
+int
 glusterd_handle_fsm_log (rpcsvc_request_t *req);
 
 int

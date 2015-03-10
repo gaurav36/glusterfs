@@ -241,3 +241,12 @@ struct gf1_cli_umount_rsp {
        int op_ret;
        int op_errno;
 };
+
+enum gf_bitrot_cli_type {
+	GF_BITROT_OPTION_TYPE_NONE = 0,
+	GF_BITROT_OPTION_TYPE,
+	GF_BITROT_OPTION_TYPE_SCRUB_THROTTLE,
+	GF_BITROT_OPTION_TYPE_SCRUB_FREQ,
+	GF_BITROT_OPTION_TYPE_SCRUB
+};
+

@@ -11,7 +11,7 @@ glusterd_la_SOURCES = glusterd.c glusterd-handler.c glusterd-sm.c \
 	glusterd-syncop.c glusterd-hooks.c glusterd-volume-set.c \
 	glusterd-locks.c glusterd-snapshot.c glusterd-mgmt-handler.c \
 	glusterd-mgmt.c glusterd-peer-utils.c glusterd-statedump.c \
-        glusterd-snapshot-utils.c glusterd-conn-mgmt.c \
+        glusterd-snapshot-utils.c glusterd-conn-mgmt.c glusterd-bitrot.c \
 	glusterd-proc-mgmt.c glusterd-svc-mgmt.c glusterd-shd-svc.c \
 	glusterd-nfs-svc.c glusterd-quotad-svc.c glusterd-svc-helper.c \
 	glusterd-conn-helper.c glusterd-snapd-svc.c glusterd-snapd-svc-helper.c
