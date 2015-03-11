@@ -171,6 +171,28 @@ out:
 }
 
 int32_t
+glusterd_check_if_bitrot_trans_enabled (glusterd_volinfo_t *volinfo)
+{
+        int32_t  ret           = 0;
+        int      flag          = _gf_false;
+
+        flag = glusterd_volinfo_get_boolean (volinfo, VKEY_FEATURES_BITROR);
+        if (flag == -1) {
+                gf_log ("", GF_LOG_ERROR, "failed to get the bitrot status");
+                ret = -1;
+                goto out;
+        }
+
+        if (flag == _gf_false) {
+                ret = -1;
+                goto out;
+        }
+        ret = 0;
+out:
+        return ret;
+}
+
+int32_t
 glusterd_quota_initiate_fs_crawl (glusterd_conf_t *priv, char *volname,
                                   int type)
 {
@@ -1190,6 +1212,109 @@ out:
         return ret;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int
+glusterd_op_bitrot (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
+{
+        glusterd_volinfo_t     *volinfo      = NULL;
+        int32_t                 ret          = -1;
+        char                   *volname      = NULL;
+        int                     type         = -1;
+        gf_boolean_t            start_crawl  = _gf_false;
+        glusterd_conf_t        *priv         = NULL;
+        xlator_t               *this         = NULL;
+
+        GF_ASSERT (dict);
+        GF_ASSERT (op_errstr);
+
+        this = THIS;
+        GF_ASSERT (this);
+        priv = this->private;
+        GF_ASSERT (priv);
+
+        ret = dict_get_str (dict, "volname", &volname);
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Unable to get volume name");
+                goto out;
+        }
+
+        ret = glusterd_volinfo_find (volname, &volinfo);
+        if (ret) {
+                gf_asprintf (op_errstr, FMTSTR_CHECK_VOL_EXISTS, volname);
+                goto out;
+        }
+
+        ret = dict_get_int32 (dict, "type", &type);
+
+        
+        switch (type) {
+                case GF_QUOTA_OPTION_TYPE_ENABLE:
+                        ret = glusterd_bitrot_enable (volinfo, op_errstr,
+                                                     &start_crawl);
+                        if (ret < 0)
+                                goto out;
+                        break;
+
+                case GF_QUOTA_OPTION_TYPE_DISABLE:
+                        ret = glusterd_bitrot_disable (volinfo, op_errstr,
+                                                      &start_crawl);
+                        if (ret < 0)
+                                goto out;
+
+                        break;
+
+               
+                default:
+                        gf_asprintf (op_errstr, "Bitrot command failed. Invalid "
+                                     "opcode");
+                        ret = -1;
+                        goto out;
+        }
+
+        if (priv->op_version > GD_OP_VERSION_MIN) {
+                ret = glusterd_bitrot_op (type);
+                if (ret)
+                        goto out;
+        }
+
+        ret = glusterd_create_volfiles_and_notify_services (volinfo);
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Unable to re-create "
+                                                  "volfiles");
+                ret = -1;
+                goto out;
+        }
+
+        ret = glusterd_store_volinfo (volinfo, GLUSTERD_VOLINFO_VER_AC_INCREMENT);
+        if (ret)
+                goto out;
+
+        if (GLUSTERD_STATUS_STARTED == volinfo->status) {
+                if (priv->op_version == GD_OP_VERSION_MIN)
+                        ret = priv->nfs_svc.manager (&(priv->nfs_svc), NULL, 0);
+        }
+
+        if (rsp_dict && start_crawl == _gf_true)
+                glusterd_quota_initiate_fs_crawl (priv, volname, type);
+
+        ret = 0;
+out:
+        return ret;
+}
+
 /*
  * glusterd_get_gfid_from_brick() fetches the 'trusted.gfid' attribute of @path
  * from each brick in the backend and places the same in the rsp_dict with the
@@ -1337,6 +1462,93 @@ out:
         }
         return ret;
 }
+
+int
+glusterd_op_stage_bitrot (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
+{
+        int                 ret            = 0;
+        char               *volname        = NULL;
+        gf_boolean_t        exists         = _gf_false;
+        int                 type           = 0;
+        xlator_t           *this           = NULL;
+        glusterd_conf_t    *priv           = NULL;
+        glusterd_volinfo_t *volinfo        = NULL;
+        char               *hard_limit_str = NULL;
+        uint64_t           hard_limit      = 0;
+
+        this = THIS;
+        GF_ASSERT (this);
+        priv = this->private;
+        GF_ASSERT (priv);
+
+        GF_ASSERT (dict);
+        GF_ASSERT (op_errstr);
+
+        ret = dict_get_str (dict, "volname", &volname);
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Unable to get volume name");
+                goto out;
+        }
+
+        exists = glusterd_check_volume_exists (volname);
+        if (!exists) {
+                gf_asprintf (op_errstr, FMTSTR_CHECK_VOL_EXISTS, volname);
+                ret = -1;
+                goto out;
+        }
+        ret = glusterd_volinfo_find (volname, &volinfo);
+        if (ret) {
+                gf_asprintf (op_errstr, FMTSTR_CHECK_VOL_EXISTS, volname);
+                goto out;
+        }
+
+        if (!glusterd_is_volume_started (volinfo)) {
+                *op_errstr = gf_strdup ("Volume is stopped, start volume "
+                                        "before executing quota command.");
+                ret = -1;
+                goto out;
+        }
+
+        ret = dict_get_int32 (dict, "type", &type);
+        if (ret) {
+                *op_errstr = gf_strdup ("Volume quota failed, internal error, "
+                                        "unable to get type of operation");
+                goto out;
+        }
+
+
+       
+        if ((GF_QUOTA_OPTION_TYPE_ENABLE != type) &&
+            (glusterd_check_if_bitrot_trans_enabled (volinfo) != 0)) {
+                ret = -1;
+                gf_asprintf (op_errstr, "Bitrot is not enabled on volume %s",
+                             volname);
+                goto out;
+        }
+
+        switch (type) {
+        case GF_BITROT_OPTION_TYPE_ENABLE:
+                if (is_origin_glusterd (dict)) { 
+                        *op_errstr = gf_strdup ("Error in staging unavailable");
+                        ret = -1;
+                        goto out;
+                }
+                break;
+
+        default:
+                break;
+        }
+
+        ret = 0;
+
+ out:
+        if (ret && op_errstr && *op_errstr)
+                gf_log (this->name, GF_LOG_ERROR, "%s", *op_errstr);
+        gf_log (this->name, GF_LOG_DEBUG, "Returning %d", ret);
+
+         return ret;
+}
+
 int
 glusterd_op_stage_quota (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
 {
