@@ -7636,6 +7636,123 @@ out:
 }
 
 int
+glusterd_volume_bitrot_scrub_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict)
+{
+        int                      ret                = -1;
+        char                    *volname            = NULL;
+        char                    *scrub_freq         = NULL;
+        char                    *scrub_state        = NULL;
+        char                    *scrub_impact       = NULL;
+        uint64_t                 scrubbed_files     = 0;
+        uint64_t                 unsigned_files     = 0;
+        uint64_t                 last_scrub_time    = 0;
+        uint64_t                 scrub_duration     = 0;
+        uint64_t                 error_count        = 0;
+        xlator_t                *this               = NULL;
+        glusterd_conf_t         *priv               = NULL;
+        glusterd_volinfo_t      *volinfo            = NULL;
+
+        this = THIS;
+        GF_ASSERT (this);
+
+        priv = this->private;
+        GF_ASSERT (priv);
+
+        ret = dict_set_str (aggr, "bitrot_log_file",
+                           (priv->bitd_svc.proc.logfile));
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Failed to set bitrot log "
+                        "file location");
+                goto out;
+        }
+
+        ret = dict_set_str (aggr, "scrub_log_file",
+                           (priv->scrub_svc.proc.logfile));
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Failed to set scrubber log "
+                        "file location");
+                goto out;
+        }
+
+        ret = dict_get_str (aggr, "volname", &volname);
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Unable to get volume name");
+                goto out;
+        }
+
+        ret = glusterd_volinfo_find (volname, &volinfo);
+        if (ret) {
+                gf_log (this->name, GF_LOG_ERROR, "Unable to get volinfo");
+                goto out;
+        }
+
+        ret = dict_get_str (volinfo->dict, "features.scrub-freq", &scrub_freq);
+        if (!ret) {
+                ret = dict_set_str (aggr, "features.scrub-freq", scrub_freq);
+                if (ret) {
+                        gf_log (this->name, GF_LOG_ERROR, "Failed to set "
+                                "scrub-frequency value to dictionary");
+                        goto out;
+                }
+        }
+
+        ret = dict_get_str (volinfo->dict, "features.scrub-throttle",
+                            &scrub_impact);
+        if (!ret) {
+                ret = dict_set_str (aggr, "features.scrub-throttle",
+                                    scrub_impact);
+                if (ret) {
+                        gf_log (this->name, GF_LOG_ERROR, "Failed to set "
+                                "scrub-throttle value to dictionary");
+                        goto out;
+                }
+        }
+
+        ret = dict_get_str (volinfo->dict, "features.bitrot", &scrub_state);
+        if (!ret) {
+                ret = dict_set_str (aggr, "features.bitrot", scrub_state);
+                if (ret) {
+                        gf_log (this->name, GF_LOG_ERROR, "Failed to set "
+                                "scrub state value to dictionary");
+                        goto out;
+                }
+        }
+
+        ret = dict_set_uint64 (aggr, "scrubbed-files", 0);
+        if (ret) {
+                gf_log (this->name, GF_LOG_DEBUG, "Failed to set scrubbed-file"
+                        "value");
+        }
+
+        ret = dict_set_uint64 (aggr, "unsigned-files", 0);
+        if (ret) {
+                gf_log (this->name, GF_LOG_DEBUG, "Failed to set unsigned-file"
+                        "value");
+        }
+
+        ret = dict_set_uint64 (aggr, "last-scrub-time", 0);
+        if (ret) {
+                gf_log (this->name, GF_LOG_DEBUG, "Failed to set last scrub"
+                        "time value");
+        }
+
+        ret = dict_set_uint64 (aggr, "scrub-duration", 0);
+        if (ret) {
+                gf_log (this->name, GF_LOG_DEBUG, "Failed to set scrubbed-"
+                        "duration value");
+        }
+
+        ret = dict_set_uint64 (aggr, "error-count", 0);
+        if (ret) {
+                gf_log (this->name, GF_LOG_DEBUG, "Failed to set error count"
+                        "value");
+        }
+
+out:
+        return ret;
+}
+
+int
 glusterd_volume_rebalance_use_rsp_dict (dict_t *aggr, dict_t *rsp_dict)
 {
         char                 key[256]      = {0,};

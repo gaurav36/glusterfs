@@ -5012,6 +5012,17 @@ cli_cmd_bitrot_parse (const char **words, int wordcount, dict_t **options)
                 }
         }
 
+        if ((strcmp (words[3], "scrub") == 0) &&
+            (strcmp (words[4], "status") == 0)) {
+                if (wordcount == 5) {
+                        type = GF_BITROT_CMD_SCRUB_STATUS;
+                        goto set_type;
+                } else {
+                        ret = -1;
+                        goto out;
+                }
+        }
+
         if (!strcmp (w, "scrub-throttle")) {
                 if (!words[4]) {
                         cli_err ("Missing scrub-throttle value for bitrot "

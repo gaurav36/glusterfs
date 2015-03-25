@@ -451,6 +451,9 @@ glusterd_op_bitrot (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
                         goto out;
                 break;
 
+        case GF_BITROT_CMD_SCRUB_STATUS:
+                break;
+
         default:
                 gf_asprintf (op_errstr, "Bitrot command failed. Invalid "
                              "opcode");

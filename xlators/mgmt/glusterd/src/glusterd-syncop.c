@@ -313,6 +313,12 @@ glusterd_syncop_aggr_rsp_dict (glusterd_op_t op, dict_t *aggr, dict_t *rsp)
                         goto out;
         break;
 
+        case GD_OP_BITROT:
+                ret = glusterd_volume_bitrot_scrub_use_rsp_dict (aggr, rsp);
+                if (ret)
+                        goto out;
+                break;
+
         default:
         break;
         }
