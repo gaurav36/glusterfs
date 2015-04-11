@@ -282,6 +282,8 @@ static int
 _build_option_key (dict_t *d, char *k, data_t *v, void *tmp)
 {
         char                    reconfig_key[256] = {0, };
+        char                    *bitrot           = NULL;
+        char                    *scrub            = NULL;
         struct args_pack        *pack             = NULL;
         int                     ret               = -1;
         xlator_t                *this             = NULL;
@@ -295,6 +297,29 @@ _build_option_key (dict_t *d, char *k, data_t *v, void *tmp)
         pack = tmp;
         if (strcmp (k, GLUSTERD_GLOBAL_OPT_VERSION) == 0)
                 return 0;
+
+        if (!strcmp (k, "features.scrub") &&
+            priv->op_version >= GD_OP_VERSION_3_7_0) {
+                ret = dict_get_str (d, "features.bitrot", &bitrot);
+                if (!ret) {
+                        if (!strcmp(bitrot, "off")) {
+                                scrub = gf_strdup ("Inactive");
+                        } else {
+                                if (strcmp (v->data, "pause"))
+                                        scrub = gf_strdup ("Active");
+                                else
+                                        scrub = gf_strdup ("pause");
+                        }
+                }
+
+                snprintf (reconfig_key, 256, "volume%d.option.%s",
+                          pack->vol_count, k);
+                ret = dict_set_str (pack->dict, reconfig_key, scrub);
+                if (0 == ret)
+                        pack->opt_count++;
+
+                return 0;
+        }
 
         if (priv->op_version > GD_OP_VERSION_MIN) {
                 if ((strcmp (k, "features.limit-usage") == 0) ||
