@@ -445,6 +445,9 @@ glusterd_op_stage_bitrot (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
 {
         int                  ret             = 0;
         char                *volname         = NULL;
+        char                *scrub_cmd       = NULL;
+        char                *scrub_dict      = NULL;
+        char                 msg[2048]       = {0,};
         int                  type            = 0;
         xlator_t            *this            = NULL;
         glusterd_conf_t     *priv            = NULL;
@@ -494,6 +497,30 @@ glusterd_op_stage_bitrot (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
                 gf_asprintf (op_errstr, "Bitrot is not enabled on volume %s",
                              volname);
                 goto out;
+        }
+
+        if ((GF_BITROT_OPTION_TYPE_SCRUB == type)) {
+                ret = dict_get_str (volinfo->dict, "features.scrub",
+                                    &scrub_dict);
+                if (!ret) {
+                        ret = dict_get_str (dict, "scrub-value", &scrub_cmd);
+                        if (ret) {
+                                gf_log (this->name, GF_LOG_ERROR, "Unable to "
+                                        "get scrub-value");
+                                *op_errstr = gf_strdup ("Staging stage failed "
+                                                        "for bitrot operation");
+                                goto out;
+                        }
+                        if (!strcmp (scrub_dict, scrub_cmd)) {
+                                snprintf (msg, sizeof (msg), "Scrub is already"
+                                          " %s for volume %s", scrub_cmd,
+                                          volinfo->volname);
+                                *op_errstr = gf_strdup (msg);
+                                ret = -1;
+                                goto out;
+                        }
+                }
+                ret = 0;
         }
 
  out:
