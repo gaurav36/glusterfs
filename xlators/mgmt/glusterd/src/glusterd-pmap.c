@@ -187,7 +187,7 @@ pmap_registry_alloc (xlator_t *this)
 
         pmap = pmap_registry_get (this);
 
-        for (p = pmap->last_alloc; p < 65535; p++) {
+        for (p = pmap->base_port; p < 65535; p++) {
                 if (pmap->ports[p].type != GF_PMAP_PORT_FREE)
                         continue;
 
@@ -198,7 +198,7 @@ pmap_registry_alloc (xlator_t *this)
                 }
         }
 
-        if (port)
+        if (port > pmap->last_alloc)
                 pmap->last_alloc = port;
 
         return port;
@@ -274,6 +274,7 @@ remove:
 
         pmap->ports[p].brickname = NULL;
         pmap->ports[p].xprt = NULL;
+        pmap->ports[p].type = GF_PMAP_PORT_FREE;
 
 out:
         return 0;
