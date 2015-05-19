@@ -124,24 +124,18 @@ glusterd_snapdsvc_manager (glusterd_svc_t *svc, void *data, int flags)
 
         ret = glusterd_is_snapd_enabled (volinfo);
         if (ret == -1) {
-                gf_log (this->name, GF_LOG_ERROR, "Failed to read volume "
-                        "options");
+                gf_log (this->name, GF_LOG_ERROR, "Snapshot is not enabled"
+                        "on the volume %s", volinfo->volname);
                 goto out;
         }
 
         if (ret) {
                 if (!glusterd_is_volume_started (volinfo)) {
-                        if (glusterd_proc_is_running (&svc->proc)) {
-                                ret = svc->stop (svc, SIGTERM);
-                                if (ret)
-                                        gf_log (this->name, GF_LOG_ERROR,
-                                                "Couldn't stop snapd for "
-                                                "volume: %s",
-                                                volinfo->volname);
-                        } else {
-                                /* Since snapd is not running set ret to 0 */
-                                ret = 0;
-                        }
+                        ret = svc->stop (svc, SIGTERM);
+                        if (ret)
+                                gf_log (this->name, GF_LOG_ERROR, "Couldn't "
+                                        "stop snapd for volume: %s",
+                                         volinfo->volname);
                         goto out;
                 }
 
@@ -187,120 +181,37 @@ out:
 int32_t
 glusterd_snapdsvc_start (glusterd_svc_t *svc, int flags)
 {
-        int                  ret                        = -1;
-        runner_t             runner                     = {0,};
-        glusterd_conf_t     *priv                       = NULL;
-        xlator_t            *this                       = NULL;
-        char                 valgrind_logfile[PATH_MAX] = {0};
-        int                  snapd_port                 = 0;
-        char                 msg[1024]                  = {0,};
-        char                 snapd_id[PATH_MAX]         = {0,};
-        glusterd_volinfo_t  *volinfo                    = NULL;
-        glusterd_snapdsvc_t *snapd                      = NULL;
+        int                  i               = 0;
+        int                  ret             = -1;
+        dict_t              *cmdline         = NULL;
+        char                 key[16]         = {0};
+        char                *options[]       = {
+                                                "--brick-port",
+                                                "--xlator-option",
+                                                "--no-mem-accounting",
+                                                NULL
+                                                };
 
-        this = THIS;
-        GF_ASSERT(this);
-
-        priv = this->private;
-        GF_ASSERT (priv);
-
-        if (glusterd_proc_is_running (&svc->proc)) {
-                ret = 0;
+        cmdline = dict_new ();
+        if (!cmdline)
                 goto out;
-        }
 
-        /* Get volinfo->snapd from svc object */
-        snapd = cds_list_entry (svc, glusterd_snapdsvc_t, svc);
-        if (!snapd) {
-                gf_log (this->name, GF_LOG_ERROR, "Failed to get snapd object "
-                        "from snapd service");
-                goto out;
-        }
-
-        /* Get volinfo from snapd */
-        volinfo = cds_list_entry (snapd, glusterd_volinfo_t, snapd);
-        if (!volinfo) {
-                gf_log (this->name, GF_LOG_ERROR, "Failed to get volinfo from "
-                        "from snapd");
-                goto out;
-        }
-
-        ret = access (svc->proc.volfile, F_OK);
-        if (ret) {
-                gf_log (this->name, GF_LOG_DEBUG,
-                        "snapd Volfile %s is not present", svc->proc.volfile);
-                /* If glusterd is down on one of the nodes and during
-                 * that time "USS is enabled" for the first time. After some
-                 * time when the glusterd which was down comes back it tries
-                 * to look for the snapd volfile and it does not find snapd
-                 * volfile and because of this starting of snapd fails.
-                 * Therefore, if volfile is not present then create a fresh
-                 * volfile.
-                 */
-                ret = glusterd_snapdsvc_create_volfile (volinfo);
-                if (ret) {
-                        gf_log (this->name, GF_LOG_ERROR, "Couldn't create "
-                                "snapd volfile for volume: %s",
-                                volinfo->volname);
+        for (i = 0; options[i]; i++) {
+                memset (key, 0, sizeof (key));
+                snprintf (key, sizeof (key), "arg%d", i);
+                ret = dict_set_str (cmdline, key, options[i]);
+                if (ret)
                         goto out;
-                }
-        }
-        runinit (&runner);
-
-        if (priv->valgrind) {
-                snprintf (valgrind_logfile, PATH_MAX, "%s/valgrind-snapd.log",
-                          svc->proc.logdir);
-
-                runner_add_args (&runner, "valgrind", "--leak-check=full",
-                                 "--trace-children=yes", "--track-origins=yes",
-                                 NULL);
-                runner_argprintf (&runner, "--log-file=%s", valgrind_logfile);
         }
 
-        snprintf (snapd_id, sizeof (snapd_id), "snapd-%s", volinfo->volname);
-        runner_add_args (&runner, SBIN_DIR"/glusterfsd",
-                         "-s", svc->proc.volfileserver,
-                         "--volfile-id", svc->proc.volfileid,
-                         "-p", svc->proc.pidfile,
-                         "-l", svc->proc.logfile,
-                         "--brick-name", snapd_id,
-                         "-S", svc->conn.sockpath, NULL);
-
-        snapd_port = volinfo->snapd.port;
-        if (!snapd_port) {
-                snapd_port = pmap_registry_alloc (THIS);
-                if (!snapd_port) {
-                        snprintf (msg, sizeof (msg), "Could not allocate port "
-                                  "for snapd service for volume %s",
-                                  volinfo->volname);
-                        runner_log (&runner, this->name, GF_LOG_DEBUG, msg);
-                        ret = -1;
-                        goto out;
-                }
-        }
-        runner_add_arg (&runner, "--brick-port");
-        runner_argprintf (&runner, "%d", snapd_port);
-        runner_add_arg (&runner, "--xlator-option");
-        runner_argprintf (&runner, "%s-server.listen-port=%d",
-                         volinfo->volname, snapd_port);
-        runner_add_arg (&runner, "--no-mem-accounting");
-
-        snprintf (msg, sizeof (msg),
-                  "Starting the snapd service for volume %s", volinfo->volname);
-        runner_log (&runner, this->name, GF_LOG_DEBUG, msg);
-
-        if (flags == PROC_START_NO_WAIT) {
-                ret = runner_run_nowait (&runner);
-        } else {
-                synclock_unlock (&priv->big_lock);
-                {
-                        ret = runner_run (&runner);
-                }
-                synclock_lock (&priv->big_lock);
-        }
-        volinfo->snapd.port = snapd_port;
+        ret = glusterd_svc_start (svc, flags, cmdline);
 
 out:
+        if (cmdline)
+                dict_unref (cmdline);
+
+        gf_log (THIS->name, GF_LOG_DEBUG, "Returning %d", ret);
+
         return ret;
 }
 
